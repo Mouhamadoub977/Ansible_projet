@@ -1,0 +1,84 @@
+---
+# ====================================================================
+# TÂCHES DU RÔLE JENKINS
+# ====================================================================
+# Ce fichier contient toutes les tâches nécessaires pour installer,
+# configurer et démarrer Jenkins sur le serveur cible.
+# Note: Ce rôle installe Jenkins avec Java 11, mais Jenkins nécessite
+# Java 17+. Le playbook fix_jenkins_java_path.yml doit être exécuté
+# après pour configurer Jenkins avec Java 17.
+# ====================================================================
+
+# Installation des dépendances nécessaires pour Jenkins
+# - openjdk-11-jdk: Java Development Kit (remplacé plus tard par Java 17)
+# - apt-transport-https: permet d'utiliser des dépôts HTTPS
+# - ca-certificates: certificats CA pour les connexions sécurisées
+# - curl: outil pour transférer des données via HTTP/HTTPS
+# - gnupg: outil de chiffrement pour vérifier les signatures
+# - lsb-release: informations sur la distribution Linux
+- name: Install dependencies
+  apt:
+    name:
+      - openjdk-11-jdk
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+# Ajout de la clé GPG du dépôt Jenkins pour vérifier l'authenticité des paquets
+- name: Add Jenkins apt key
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io.key
+    state: present
+
+# Ajout du dépôt APT de Jenkins pour pouvoir installer Jenkins via apt
+- name: Add Jenkins apt repository
+  apt_repository:
+    repo: deb https://pkg.jenkins.io/debian-stable binary/
+    state: present
+    filename: jenkins
+
+# Mise à jour du cache APT pour inclure les paquets du nouveau dépôt
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+# Installation du paquet Jenkins
+- name: Install Jenkins
+  apt:
+    name: jenkins
+    state: present
+
+# Démarrage du service Jenkins et configuration pour qu'il démarre automatiquement
+# Note: Cette tâche peut échouer si Jenkins ne peut pas démarrer avec Java 11
+# Dans ce cas, le playbook fix_jenkins_java_path.yml doit être exécuté
+- name: Ensure Jenkins service is running and enabled
+  service:
+    name: jenkins
+    state: started
+    enabled: yes
+
+# Attente que Jenkins démarre et soit accessible sur le port 8080
+# - delay: 10 secondes avant de commencer à vérifier
+# - timeout: 300 secondes (5 minutes) maximum d'attente
+- name: Wait for Jenkins to start up
+  wait_for:
+    port: 8080
+    delay: 10
+    timeout: 300
+
+# Récupération du mot de passe administrateur initial généré par Jenkins
+# Ce mot de passe est nécessaire pour la première connexion à l'interface web
+- name: Get Jenkins initial admin password
+  command: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: jenkins_admin_password
+  changed_when: false
+
+# Affichage du mot de passe administrateur initial dans la sortie Ansible
+# pour permettre à l'utilisateur de se connecter à Jenkins
+- name: Display Jenkins initial admin password
+  debug:
+    msg: "Jenkins initial admin password: {{ jenkins_admin_password.stdout }}"

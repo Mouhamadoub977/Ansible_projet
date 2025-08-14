@@ -1,0 +1,43 @@
+---
+# ====================================================================
+# PLAYBOOK PRINCIPAL - DÉPLOIEMENT APACHE2 ET JENKINS
+# ====================================================================
+# Ce playbook contient deux plays distincts :
+# 1. Déploiement d'Apache2 sur tous les serveurs web
+# 2. Déploiement de Jenkins uniquement sur host1
+# ====================================================================
+
+# ====================================================================
+# PLAY 1 : DÉPLOIEMENT APACHE2
+# ====================================================================
+- name: Deploy Apache2 on webservers
+  # Cible tous les hôtes du groupe 'webservers' défini dans l'inventaire
+  hosts: webservers
+  # Exécute les tâches avec les privilèges sudo (équivalent à sudo)
+  become: yes
+  # Variables globales pour ce play, accessibles dans toutes les tâches
+  vars:
+    apache_port: 80
+  
+  # Application du rôle 'apache2' qui contient toutes les tâches
+  # nécessaires pour installer et configurer Apache2
+  roles:
+    # Passage de variables directement au rôle avec des valeurs conditionnelles
+    - role: apache2
+      vars:
+        hello_message: "{% if inventory_hostname == 'host1' %}Hello World 1{% else %}Hello World 2{% endif %}"
+
+# ====================================================================
+# PLAY 2 : DÉPLOIEMENT JENKINS
+# ====================================================================
+- name: Deploy Jenkins on host1
+  # Cible tous les hôtes du groupe 'jenkins' défini dans l'inventaire
+  # Dans notre cas, seul 'host1' fait partie de ce groupe
+  hosts: jenkins
+  # Exécute les tâches avec les privilèges sudo
+  become: yes
+  
+  # Application du rôle 'jenkins' qui contient toutes les tâches
+  # nécessaires pour installer et configurer Jenkins
+  roles:
+    - jenkins

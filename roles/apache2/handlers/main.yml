@@ -1,0 +1,17 @@
+---
+# ====================================================================
+# HANDLERS DU RÔLE APACHE2
+# ====================================================================
+# Les handlers sont des tâches spéciales qui ne s'exécutent que lorsqu'elles
+# sont notifiées par une autre tâche via la directive "notify".
+# Ils sont généralement utilisés pour redémarrer des services lorsque
+# leur configuration a été modifiée.
+# ====================================================================
+
+# Handler pour redémarrer le service Apache2
+# Ce handler est appelé par la tâche "Create custom index.html with dynamic content"
+# lorsque le fichier index.html est modifié
+- name: Restart Apache
+  service:
+    name: apache2    # Nom du service à redémarrer
+    state: restarted # État souhaité (restarted = arrêté puis démarré)

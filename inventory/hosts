@@ -1,0 +1,19 @@
+# ====================================================================
+# FICHIER D'INVENTAIRE ANSIBLE
+# ====================================================================
+# Ce fichier définit les groupes d'hôtes et leurs adresses IP
+# Les groupes sont utilisés dans les playbooks pour cibler des hôtes spécifiques
+# ====================================================================
+
+# Groupe 'webservers' : tous les serveurs qui exécuteront Apache2
+[webservers]
+# Format: nom_hôte ansible_host=adresse_ip ansible_user=utilisateur_ssh
+# host1 : premier serveur web avec Apache2
+host1 ansible_host=13.60.162.182 ansible_user=ubuntu
+# host2 : deuxième serveur web avec Apache2
+host2 ansible_host=13.60.184.126 ansible_user=ubuntu
+
+# Groupe 'jenkins' : serveurs qui exécuteront Jenkins
+# Dans notre cas, seul host1 exécutera Jenkins
+[jenkins]
+host1 ansible_host=13.60.162.182 ansible_user=ubuntu

@@ -1,0 +1,126 @@
+---
+# ====================================================================
+# PLAYBOOK DE CORRECTION - CONFIGURATION DE JAVA 17 POUR JENKINS
+# ====================================================================
+# Ce playbook résout le problème où Jenkins ne démarre pas car il utilise
+# Java 11 au lieu de Java 17, même si Java 17 est installé sur le système.
+# Il configure explicitement Jenkins pour utiliser Java 17 via:
+# 1. Un override systemd
+# 2. La configuration dans /etc/default/jenkins
+# ====================================================================
+
+- name: Configure Jenkins to use Java 17 explicitly
+  # Cible tous les hôtes du groupe 'jenkins' défini dans l'inventaire
+  hosts: jenkins
+  # Exécute les tâches avec les privilèges sudo
+  become: yes
+  
+  tasks:
+    # Récupère le chemin complet de Java (résout les liens symboliques)
+    # Utile pour vérifier quelle version de Java est utilisée par défaut
+    - name: Get Java 17 path
+      command: readlink -f /usr/bin/java
+      # Stocke le résultat dans la variable 'java_path'
+      register: java_path
+      # Indique que cette commande ne modifie pas le système
+      # (évite que Ansible marque cette tâche comme "changed")
+      changed_when: false
+      
+    # Affiche le chemin Java pour vérification/débogage
+    - name: Display Java path
+      debug:
+        var: java_path.stdout
+        
+    # Crée le répertoire pour les overrides systemd de Jenkins
+    # Ce répertoire contiendra la configuration qui force Jenkins à utiliser Java 17
+    - name: Ensure Jenkins configuration directory exists
+      file:
+        path: /etc/systemd/system/jenkins.service.d
+        state: directory
+        mode: '0755'
+        
+    # Crée un fichier override.conf pour systemd qui définit explicitement
+    # les variables d'environnement JAVA_HOME et JENKINS_JAVA_CMD
+    # Ces variables forcent Jenkins à utiliser Java 17
+    - name: Create Jenkins override configuration
+      copy:
+        dest: /etc/systemd/system/jenkins.service.d/override.conf
+        content: |
+          [Service]
+          Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+          Environment="JENKINS_JAVA_CMD=/usr/lib/jvm/java-17-openjdk-amd64/bin/java"
+        mode: '0644'
+      # Stocke le statut de cette tâche pour savoir si le fichier a été modifié
+      register: jenkins_override
+        
+    # Modifie les arguments Java dans la configuration Jenkins
+    # pour s'assurer qu'ils sont compatibles avec Java 17
+    - name: Update Jenkins default configuration
+      lineinfile:
+        path: /etc/default/jenkins
+        regexp: '^JAVA_ARGS='
+        line: 'JAVA_ARGS="-Djava.awt.headless=true -Djava.net.preferIPv4Stack=true"'
+        
+    # Ajoute la variable JAVA_HOME dans la configuration Jenkins
+    # pour s'assurer que Jenkins utilise le bon chemin Java
+    - name: Add JAVA_HOME to Jenkins default configuration
+      lineinfile:
+        path: /etc/default/jenkins
+        line: 'JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"'
+        insertafter: '^JENKINS_ARGS='
+        
+    # Recharge le daemon systemd pour prendre en compte les modifications
+    # de configuration (nécessaire après avoir modifié un fichier systemd)
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+      # Ne s'exécute que si le fichier override.conf a été modifié
+      when: jenkins_override.changed
+        
+    # Redémarre le service Jenkins pour appliquer les changements
+    - name: Restart Jenkins service
+      systemd:
+        name: jenkins
+        state: restarted
+        
+    # Attend que Jenkins démarre et soit accessible sur le port 8080
+    # Cela permet de vérifier que Jenkins a bien démarré après les modifications
+    - name: Wait for Jenkins to start
+      wait_for:
+        port: 8080
+        delay: 10
+        timeout: 60
+      # Stocke le résultat pour vérifier si Jenkins a démarré avec succès
+      register: jenkins_wait
+      # Continue l'exécution même si Jenkins ne démarre pas
+      ignore_errors: yes
+        
+    # Vérifie l'état du service Jenkins après le redémarrage
+    - name: Check Jenkins service status after restart
+      command: systemctl status jenkins
+      register: jenkins_status
+      # Indique que cette commande ne modifie pas le système
+      changed_when: false
+      # Continue l'exécution même si la commande échoue
+      ignore_errors: yes
+        
+    # Affiche l'état du service Jenkins pour vérification/débogage
+    - name: Display Jenkins service status
+      debug:
+        var: jenkins_status.stdout_lines
+        
+    # Si Jenkins n'a pas démarré, récupère les logs pour diagnostic
+    - name: Check Jenkins logs if service failed
+      command: journalctl -xeu jenkins.service
+      register: jenkins_logs
+      changed_when: false
+      ignore_errors: yes
+      # Ne s'exécute que si Jenkins n'a pas démarré correctement
+      when: jenkins_wait is failed
+        
+    # Affiche les logs Jenkins en cas d'échec pour diagnostic
+    - name: Display Jenkins logs if service failed
+      debug:
+        var: jenkins_logs.stdout_lines
+      # Ne s'exécute que si Jenkins n'a pas démarré correctement
+      when: jenkins_wait is failed

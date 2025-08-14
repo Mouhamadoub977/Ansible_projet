@@ -1,0 +1,46 @@
+---
+# ====================================================================
+# TÂCHES DU RÔLE APACHE2
+# ====================================================================
+# Ce fichier contient toutes les tâches nécessaires pour installer,
+# configurer et démarrer Apache2, ainsi que pour déployer une page HTML
+# personnalisée sur chaque serveur.
+# ====================================================================
+
+# Mise à jour du cache APT pour s'assurer que les dernières versions des paquets sont disponibles
+# cache_valid_time: 3600 signifie que le cache est considéré valide pendant 1 heure (3600 secondes)
+# Cela évite de mettre à jour le cache trop fréquemment lors de multiples exécutions
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+# Installation du paquet Apache2 via le gestionnaire de paquets APT
+# state: present signifie que le paquet doit être installé (mais pas forcément mis à jour)
+- name: Install Apache2
+  apt:
+    name: apache2
+    state: present
+
+# S'assure que le service Apache2 est démarré et configuré pour démarrer automatiquement au boot
+# state: started - démarre le service s'il n'est pas déjà en cours d'exécution
+# enabled: yes - configure le service pour qu'il démarre automatiquement au démarrage du système
+- name: Ensure Apache2 service is running and enabled
+  service:
+    name: apache2
+    state: started
+    enabled: yes
+
+# Crée une page HTML personnalisée à partir d'un template Jinja2
+# Le template utilise la variable 'hello_message' définie dans le playbook principal
+# pour afficher un message différent sur chaque serveur
+- name: Create custom index.html with dynamic content
+  template:
+    src: index.html.j2      # Fichier template source dans le dossier templates/
+    dest: /var/www/html/index.html  # Destination sur le serveur cible
+    owner: www-data         # Propriétaire du fichier (utilisateur Apache)
+    group: www-data         # Groupe du fichier (groupe Apache)
+    mode: '0644'            # Permissions du fichier (rw-r--r--)
+  # Notifie le handler 'Restart Apache' défini dans handlers/main.yml
+  # Le handler sera exécuté à la fin du play si cette tâche a modifié le fichier
+  notify: Restart Apache
